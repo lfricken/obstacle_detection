@@ -191,7 +191,7 @@ void depth_cb(freenect_device* device, void* v_depth, uint32_t timestamp)
         for(int i=0; i<(640*480*3); i+=3)
         {
             int x = i/3;
-            float val = gradient.getPoint(Vec2i( (((x%640))/xScale-xOff), -((x/480)/yScale -yOff))).value;
+            float val = gradient.getPoint(Vec2i( (((x%640))/xScale-xOff), -((x/640)/yScale -yOff))).value;
             if(val == -9999.0)
             {
                 depth_feed[i+0] = 255;
@@ -264,6 +264,15 @@ void video_cb(freenect_device* device, void* v_video, uint32_t timestamp)
 /**================================================================================**/
 /**THIS IS THE SECOND THREAD, effectivly a second main()**/
 /**================================================================================**/
+void* thread_opengl(void* arg)
+{
+    while(true)
+    {
+        //cout << "\nThread Running!";
+    }
+    return NULL;
+}
+
 void* freenect_threadfunc(void* arg)
 {
     bool enableAccel = true;
@@ -329,7 +338,6 @@ void display()
         //sleep(1);//wait for depth to get done drawing
     }
 
-
     glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, depth_feed);//you can pass an array here to display
 
@@ -339,9 +347,9 @@ void display()
     glTexCoord2f(0, 0);
     glVertex3f(0,0,0);
     glTexCoord2f(1, 0);
-    glVertex3f(640,0,0);
+    glVertex3f(480,0,0);
     glTexCoord2f(1, 1);
-    glVertex3f(640,480,0);
+    glVertex3f(480,480,0);
     glTexCoord2f(0, 1);
     glVertex3f(0,480,0);
     glEnd();
@@ -373,10 +381,10 @@ void init()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
-    glViewport(0,0,640,480);
+    glViewport(0,0,960,480);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho (0, 640, 480, 0, -1.0f, 1.0f);
+    glOrtho (0, 960, 480, 0, -1.0f, 1.0f);
     glMatrixMode(GL_MODELVIEW);
 }
 
@@ -445,6 +453,7 @@ int main(int argc, char **argv)
 
     /**WE MUST HAVE OPENED A DEVICE, SO CREATE A NEW THREAD TO DEAL WITH IT**/
     res = pthread_create(&freenect_thread, NULL, freenect_threadfunc, NULL);
+    int gl = pthread_create(&freenect_thread, NULL, thread_opengl, NULL);
     if(res)
     {
         printf("\n\nPThread_create failed.\n");
@@ -468,7 +477,7 @@ int main(int argc, char **argv)
 
     glutInit(&argc, argv);
     glutInitDisplayMode (GLUT_SINGLE | GLUT_RGB);
-    glutInitWindowSize(640, 640);
+    glutInitWindowSize(960, 480);
     glutInitWindowPosition(100, 100);
     glutCreateWindow("Viewing Window 0");
     init();

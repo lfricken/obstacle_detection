@@ -4,6 +4,7 @@
 
 #include <iostream> //cout
 #include <pthread.h>//pthreads
+#include <string.h>//strcpy
 #include <vector> //for std::vector
 
 #include "CoordSystemKinect.hpp"//Kinect Input
@@ -13,121 +14,156 @@
 
 using namespace std;
 //csk namespace represents CoordinateSystemKinect
+const int sizeDepth = 640*480*sizeof(uint16_t);//we need this much space to represent the depth data
+const int sizeVideo = 640*480*3*sizeof(char);//we need this much for the video data
 
-static volatile bool main_done = false;
-static volatile bool depthCB_done = false;
-static volatile bool videoCB_done = false;
+/**ASK IF THREADS HAVE STOPPED**/
+static volatile bool main_stop = false;
+static volatile bool threads_stop = false;
 
+/**FOR THREADS**/
+static volatile bool depth_used = true, video_used = true;
+static uint16_t* pDepth = NULL;
+static char* pVideo = NULL;
+static Vec3f downDirection(0,0,0);//static to prevent other files from seeing this
+
+/**LFN**/
 static freenect_context* f_ctx;
 freenect_device* f_dev;
-pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
-uint16_t t_gamma[2048];
 
+/**MISC**/
+static char userChoice = '\0';//
 
-
-
-static Vec3f downDirection(0,0,0);//static to prevent other files from seeing this
-static char userChoice = 't';//
 
 /**================================================================================**/
 /**DEPTH SENSOR CALLBACK**/
 /**================================================================================**/
 void depth_cb(freenect_device* pDevice, void* v_depth, uint32_t timestamp)
 {
-    if(downDirection.z != 0)//make sure we don't take an image with bad accelerometer data
+    if(depth_used)
     {
-        uint16_t* pDepth = static_cast<uint16_t*>(v_depth);
-        const int pointCount = csk::dimX*csk::dimY;
-        Map<float> gradient(Vec2i(80,80));
-        Map<float> height(Vec2i(80,80));
-
-        height.getPoint(Vec2i(0,0)).value = 9;
-        vector<Vec3f> pointCloud;
-        pointCloud.resize(csk::dimX*csk::dimY);//make our pointcloud large enough
-
-        /**REMOVE INVALID POINTS FROM DEPTH DATA**/
-        for(int i = 0; i<pointCount; ++i)
-            if(csk::RawDepthToMilli(pDepth[i]) < 450)
-                pDepth[i] = 0;
-
-
-        /**CREATE CARTESIAN POINT CLOUD**/
-        for(int y = 0; y<csk::dimY; ++y)
-            for(int x = 0; x<csk::dimX; ++x)
-                pointCloud[csk::GetCoord(x,y)] = csk::GetCartCoord(x, y, pDepth);
-
-
-        /**POINT CLOUD ADJUSTED FOR PITCH AND ROLL**/
-        /**NOTE THAT WE CANNOT KNOW YAW (How the kinect is turned in relation to another object)**/
-        Mat3f pitchRoll = csk::FindDownMatrix(downDirection);//find the rotation matrix
-        for(int i = 0; i<pointCount; ++i)//rotate the point cloud data appropriatly
-        {
-            pointCloud[i] = pitchRoll*pointCloud[i];
-        }
-
-
-        /**POINT CLOUD UNITS ADJUSTED FOR HUMAN VIEWING**/
-        const float unitConvert = 1.0f/50.0f;//half decimeters (50 times larger than a millimeter is half a decimeter)
-        for(int i = 0; i<pointCount; ++i)
-        {
-            pointCloud[i].z *= unitConvert;
-            pointCloud[i].y *= unitConvert;
-            pointCloud[i].x *= unitConvert;
-        }
-
-
-        /**CONVERT POINT CLOUD INTO HEIGHT MAP**/
-        for(int i = 0; i<pointCount; ++i)
-        {
-            if(height.getPoint(Vec2i(pointCloud[i].x-40, pointCloud[i].y+40)).value < pointCloud[i].z)
-                height.getPoint(Vec2i(pointCloud[i].x-40, pointCloud[i].y+40)).value = pointCloud[i].z;
-        }
-
-        /**REMOVE STRANGE VALUES FROM MAP, PRINT TO A FILE, PAUSE PROGRAM**/
-        height.makeGradient(gradient);
-        gradient.minValue = -1;
-        gradient.maxValue = 9;
-        gradient.nullRep = '-';
-        gradient.toFile("gradientMap.txt");
-        //height.normalizeMap();
-        //height.toFile("heightMap.txt");
-
-        //cin >> userChoice;
+        strncpy(reinterpret_cast<char*>(pDepth), static_cast<char*>(v_depth), sizeDepth);
+        depth_used = false;
     }
-
-    pthread_cond_signal(&gl_frame_cond);
 }
 /**================================================================================**/
-/**VIDEO CALLBACK**/
+/**RGB SENSOR CALLBACK**/
 /**================================================================================**/
 void video_cb(freenect_device* pDevice, void* v_video, uint32_t timestamp)
 {
-    //cast v_video to something better
+    if(video_used)
+    {
+        strncpy(static_cast<char*>(pVideo), static_cast<char*>(v_video), sizeVideo);
+        video_used = false;
+    }
+}
+/**================================================================================**/
+/**DEPTH PROCESS THREAD**/
+/**================================================================================**/
+void* thread_depth(void* arg)
+{
+    while(not threads_stop)
+    {
+        if(not depth_used && pDepth != NULL)//make sure we don't take an image with bad accelerometer data
+        {
+            if(downDirection.z == 0)
+                cout << "\nNo Data From Kinect Accelerometer!";
+
+            const int pointCount = csk::dimX*csk::dimY;
+            Map<float> gradient(Vec2i(80,80));
+            Map<float> height(Vec2i(80,80));
+
+            height.getPoint(Vec2i(0,0)).value = 9;
+            vector<Vec3f> pointCloud;
+            pointCloud.resize(csk::dimX*csk::dimY);//make our pointcloud large enough
+
+            /**REMOVE INVALID POINTS FROM DEPTH DATA**/
+            for(int i = 0; i<pointCount; ++i)
+                if(csk::RawDepthToMilli(pDepth[i]) < 450)
+                    pDepth[i] = 0;
+            /**CREATE CARTESIAN POINT CLOUD**/
+            for(int y = 0; y<csk::dimY; ++y)
+                for(int x = 0; x<csk::dimX; ++x)
+                    pointCloud[csk::GetCoord(x,y)] = csk::GetCartCoord(x, y, pDepth);
+            /**POINT CLOUD ADJUSTED FOR PITCH AND ROLL**/
+            /**NOTE THAT WE CANNOT KNOW YAW (How the kinect is turned in relation to another object)**/
+            Mat3f pitchRoll = csk::FindDownMatrix(downDirection);//find the rotation matrix
+            for(int i = 0; i<pointCount; ++i)//rotate the point cloud data appropriatly
+            {
+                pointCloud[i] = pitchRoll*pointCloud[i];
+            }
+            /**POINT CLOUD UNITS ADJUSTED FOR HUMAN VIEWING**/
+            const float unitConvert = 1.0f/50.0f;//half decimeters (50 times larger than a millimeter is half a decimeter)
+            for(int i = 0; i<pointCount; ++i)
+            {
+                pointCloud[i].z *= unitConvert;
+                pointCloud[i].y *= unitConvert;
+                pointCloud[i].x *= unitConvert;
+            }
+            /**CONVERT POINT CLOUD INTO HEIGHT MAP**/
+            for(int i = 0; i<pointCount; ++i)
+            {
+                if(height.getPoint(Vec2i(pointCloud[i].x-40, pointCloud[i].y+40)).value < pointCloud[i].z)
+                    height.getPoint(Vec2i(pointCloud[i].x-40, pointCloud[i].y+40)).value = pointCloud[i].z;
+            }
+            /**REMOVE STRANGE VALUES FROM MAP, PRINT TO A FILE, PAUSE PROGRAM**/
+            height.makeGradient(gradient);
+            gradient.minValue = -1;
+            gradient.maxValue = 9;
+            gradient.nullRep = '-';
+            gradient.toFile("gradientMap.txt");
+            //height.normalizeMap();
+            //height.toFile("heightMap.txt");
+            cout << "\n\tDepth Processed.";
+            depth_used = true;
+        }
+    }
+
+    return NULL;
+}
+/**================================================================================**/
+/**VIDEO PROCESS THREAD**/
+/**================================================================================**/
+void* thread_video(void* arg)
+{
+    while(not threads_stop)
+    {
+        if(not video_used && pVideo != NULL)
+        {
+            sleep(1);//simulate process time
+            cout << "\n\tVideo Processed.";
+            video_used = true;
+        }
+    }
+    return NULL;
 }
 
 
+
+
 /**================================================================================**/
-/**THIS IS THE SECOND THREAD, effectivly a second main()**/
+/**KINECT UPDATE THREAD**/
 /**================================================================================**/
-void* freenect_threadfunc(void* arg)
+void* thread_kinect(void* arg)
 {
-    freenect_video_format requested_format = FREENECT_VIDEO_RGB;
-    freenect_video_format current_format = FREENECT_VIDEO_RGB;
-    bool enableAccel = true;
-
+    /**MISC KINECT COMMANDS**/
     //freenect_set_tilt_degs(f_dev, -22);//set kinect angle
-    freenect_set_led(f_dev, static_cast<LED_COLOR>(3));//set kinect LED color, LED_RED, libfreenect.h
+    //freenect_set_led(f_dev, static_cast<LED_COLOR>(3));//set kinect LED color, LED_RED, libfreenect.h
 
-    //freenect_set_video_callback(f_dev, video_cb);
-    //freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, current_format));
-    //freenect_start_video(f_dev);//tell it to start reading rgb
+    /**SETUP VIDEO**/
+    freenect_set_video_callback(f_dev, video_cb);
+    freenect_frame_mode rgbMode = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB);
+    freenect_set_video_mode(f_dev, rgbMode);
+    freenect_start_video(f_dev);//tell it to start reading rgb
 
+    /**SETUP DEPTH**/
     freenect_set_depth_callback(f_dev, depth_cb);//set the function that will be called for each depth call
-    freenect_set_depth_mode(f_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
+    freenect_frame_mode depthMode = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT);
+    freenect_set_depth_mode(f_dev, depthMode);
     freenect_start_depth(f_dev);//tell it to start reading depth
 
 
-    while(!depthCB_done && freenect_process_events(f_ctx) >= 0 && enableAccel)/**this is primary loop for kinect stuff**/
+    while(not threads_stop && freenect_process_events(f_ctx) >= 0)/**this is primary loop for kinect stuff**/
     {
         double dx,dy,dz;
         freenect_raw_tilt_state* pState;
@@ -135,26 +171,19 @@ void* freenect_threadfunc(void* arg)
         pState = freenect_get_tilt_state(f_dev);
         freenect_get_mks_accel(pState, &dx, &dy, &dz);
         downDirection = csk::FindDown(pState->accelerometer_x, pState->accelerometer_y, pState->accelerometer_z);
-
-
         //cout << "\nDown:\t" << downDirection.x << "\t" << downDirection.y << "\t" << downDirection.z;
-
-        if(requested_format != current_format)
-        {
-            freenect_stop_video(f_dev);
-            //freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, requested_format));
-            freenect_start_video(f_dev);
-            current_format = requested_format;
-        }
     }
 
     /**SHUT DOWN STREAMS**/
-    freenect_stop_depth(f_dev);
     freenect_stop_video(f_dev);
+    freenect_stop_depth(f_dev);
     freenect_close_device(f_dev);
     freenect_shutdown(f_ctx);
     return NULL;
 }
+
+
+
 
 
 /**================================================================================**/
@@ -163,11 +192,12 @@ void* freenect_threadfunc(void* arg)
 int main(int argc, char **argv)
 {
     pthread_t freenect_thread;
-
     /**===================================================**/
     /**ALL ABOUT INITIALIZING THE CONNECTION WITH KINECT!!**/
     /**===================================================**/
 
+    pDepth = static_cast<uint16_t*>(malloc(sizeDepth));//each point is a uint16_t for depth
+    pVideo = static_cast<char*>(malloc(sizeVideo));//each point needs 3 chars to represent the color there (r255,g255,b255)
 
     if(freenect_init(&f_ctx, NULL) < 0)
     {
@@ -195,17 +225,33 @@ int main(int argc, char **argv)
 
 
 
-    /**WE MUST HAVE OPENED A DEVICE, SO CREATE A NEW THREAD TO DEAL WITH IT**/
-    int res = pthread_create(&freenect_thread, NULL, freenect_threadfunc, NULL);
-    if(res)
+    /**THREADS TO SIMULTANEOUSLY RUN THE SENSOR INPUT AND COMPUTATION**/
+    int kinect = pthread_create(&freenect_thread, NULL, thread_kinect, NULL);
+    int map = pthread_create(&freenect_thread, NULL, thread_depth, NULL);
+    int video = pthread_create(&freenect_thread, NULL, thread_video, NULL);
+
+
+    if(kinect or map or video)
     {
         cout << "\nPThread_create failed.(5)";
         return 4;
     }
 
 
-    while(not main_done)//this loops while the other threads do things like depth callback
-        sleep(10);
+    while(not main_stop)//this loops while the other threads do things like depth callback
+    {
+        sleep(1);
+        cout << "\nMain.";
+        cin >> userChoice;
+        if(userChoice == 's')
+            threads_stop = true;
+        if(userChoice == 'q')
+            main_stop = true;
+    }
+    threads_stop = true;
+
+    free(pDepth);
+    free(pVideo);
 
     cout << "\nExit Success.(0)";
     return 0;
