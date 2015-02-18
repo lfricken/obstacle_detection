@@ -42,7 +42,7 @@ void depth_cb(freenect_device* pDevice, void* v_depth, uint32_t timestamp)
 {
     if(depth_used)
     {
-        strncpy(reinterpret_cast<char*>(pDepth), static_cast<char*>(v_depth), sizeDepth);
+        memcpy(pDepth, v_depth, sizeDepth);
         depth_used = false;
     }
 }
@@ -53,7 +53,7 @@ void video_cb(freenect_device* pDevice, void* v_video, uint32_t timestamp)
 {
     if(video_used)
     {
-        strncpy(static_cast<char*>(pVideo), static_cast<char*>(v_video), sizeVideo);
+        memcpy(pVideo, v_video, sizeVideo);
         video_used = false;
     }
 }
@@ -118,7 +118,6 @@ void* thread_depth(void* arg)
             depth_used = true;
         }
     }
-
     return NULL;
 }
 /**================================================================================**/

@@ -8,7 +8,7 @@ CFLAGS=-c -Wall -I$(INC)
 
 
 all: obs_det_obj CoordSystemKinect_obj TrigLookup_obj
-	$(CC) -lfreenect main.o CoordSystemKinect.o TrigLookup.o $(LIB)libfreenect.so -o obs_det
+	$(CC) main.o CoordSystemKinect.o TrigLookup.o $(LIB)libfreenect.so -o obs_det -lfreenect -lGL -lGLU -lglut
 
 obs_det_obj:
 	$(CC) $(CFLAGS) main.cpp
