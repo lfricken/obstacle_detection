@@ -25,7 +25,8 @@ void gl_displayTexture(char* pTexture, int width, int height, int xStart, int yS
 GLuint gl_rgb_tex;
 
 
-
+    const int windowX = 1440;
+    const int windowY = 480;
 
 using namespace std;
 //csk namespace represents CoordinateSystemKinect
@@ -191,7 +192,7 @@ void* thread_video(void* arg)
     {
         if(not video_used && pVideo != NULL)
         {
-            video_used = true;
+           // video_used = true;
         }
     }
     return NULL;
@@ -210,12 +211,12 @@ void* thread_kinect(void* arg)
     //freenect_set_led(f_dev, static_cast<LED_COLOR>(3));//set kinect LED color, LED_RED, libfreenect.h
 
     /**SETUP VIDEO**/
-    /*
+
     freenect_set_video_callback(f_dev, video_cb);
     freenect_frame_mode rgbMode = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB);
     freenect_set_video_mode(f_dev, rgbMode);
     freenect_start_video(f_dev);//tell it to start reading rgb
-    */
+
     /**SETUP DEPTH**/
     freenect_set_depth_callback(f_dev, depth_cb);//set the function that will be called for each depth call
     freenect_frame_mode depthMode = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT);
@@ -336,8 +337,8 @@ void* thread_display(void* arg)
 
     glutInit(&myArgc, myArgv);
     glutInitDisplayMode (GLUT_SINGLE | GLUT_RGB);
-    glutInitWindowSize(960, 480);
-    glutInitWindowPosition(100, 100);
+    glutInitWindowSize(windowX, windowY);
+    glutInitWindowPosition(20, 20);
     glutCreateWindow("Viewing Window 0");
     gl_init();
     glutDisplayFunc(gl_display);
@@ -368,7 +369,11 @@ void gl_display()
         gl_displayTexture(pMapFeed, 640, 480, 480, 0);
         map_displayed = true;
     }
-
+    if(not video_used)
+    {
+        gl_displayTexture(pVideo, 640, 480, 960, 0);
+        video_used = true;
+    }
 
     glutSwapBuffers();
     glutPostRedisplay();
@@ -391,6 +396,7 @@ void gl_displayTexture(char* pTexture, int width, int height, int xStart, int yS
 }
 void gl_init()
 {
+
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClearDepth(1.0);
     glDepthFunc(GL_LESS);
@@ -411,10 +417,10 @@ void gl_init()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
-    glViewport(0,0,960,480);
+    glViewport(0,0,windowX,windowY);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho (0, 960, 480, 0, -1.0f, 1.0f);
+    glOrtho (0, windowX, windowY, 0, -1.0f, 1.0f);
     glMatrixMode(GL_MODELVIEW);
 }
 void gl_idle()
