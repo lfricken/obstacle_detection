@@ -1,6 +1,6 @@
 I wrote this for [IRIS, a robotics team at UIUC](https://github.com/IllinoisRoboticsInSpace) to control a robot.
 
-This program receives raw input from an Xbox 360 Kinect using the open source library [OpenKinect/libfreenect](https://github.com/OpenKinect/libfreenect) and processes it into a useful, simple, 2D space of passable and unpassable grid locations using the onboard accelerometer and infrared depth sensors. It fed this grid info to [ROS](https://www.ros.org/) via a [ROS Node](http://wiki.ros.org/Nodes) which would have used it for navigation, but the localization part of the team fell through and our robot was not autonomous at all that year :( This code did get used by future IRIS teams, but I'm not sure how much.
+This program receives raw input from an Xbox 360 Kinect using the open source library [OpenKinect/libfreenect](https://github.com/OpenKinect/libfreenect) and processes it into a useful, simple, 2D space of passable and unpassable grid locations using the Kinect's accelerometer and infrared depth sensors. It fed this grid info to [ROS](https://www.ros.org/) via a [ROS Node](http://wiki.ros.org/Nodes) which would have used it for navigation, but the localization part of the team fell through and our robot was not autonomous at all that year :( This code did get used by future IRIS teams, but I'm not sure how much.
 
 
 
