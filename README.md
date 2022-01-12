@@ -4,10 +4,8 @@ This program receives raw input from an Xbox 360 Kinect using the open source li
 
 ![render0.png](render0.png)
 
-
-I couldn't find original images it produced, and I don't have my Kinect anymore, so I recreated in Gimp the kind of map it would produce above. On the left is the perspective of the Kinect (not the input, just its perspective as viewed in RGB) while the right is the kind of image it might produce. A is the wall while B and C are pots. The map contains 3 possible values: Unknown (Black), Passable (White), and Impassable (Red). The process was managed by multiple threads, and on my laptop, was able to sustain 30 hz.
+I couldn't find original images it produced, and I don't have my Kinect anymore, so I recreated in Gimp the kind of map it would produce above. On the left is the perspective of the Kinect (not the input, just its perspective as viewed in RGB) while the right is the kind of image it might produce. The map is the real world, but viewed top down. A is the wall while B and C are pots. The map contains 3 possible values: Unknown (Black), Passable (White), and Impassable (Red). You can see an Unknown shadow cast behind all the obstacles. The process was managed by multiple threads, and on my laptop, was able to sustain 30 hz.
  
-
 detection_raw is what would be used on the robot. It only gathers the data, and then sends it to a ros node, and or a text file.
 
 detection_gl is the human debug version. It outputs it to a screen.
